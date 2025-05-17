@@ -1,0 +1,168 @@
+from flask import Flask, request
+from datetime import datetime
+import pandas as pd
+import os
+
+app = Flask(__name__)
+csv_file = 'orders.csv'
+
+def save_order_to_csv(name, phone, items, timestamp):
+    data = []
+    for item, qty in items.items():
+        if qty > 0:
+            data.append({
+                "Name": name,
+                "Phone": phone,
+                "Product": item,
+                "Quantity": qty,
+                "Timestamp": timestamp
+            })
+
+    if not data:
+        return
+
+    new_df = pd.DataFrame(data)
+
+    if os.path.exists(csv_file):
+        old_df = pd.read_csv(csv_file)
+        df = pd.concat([old_df, new_df], ignore_index=True)
+    else:
+        df = new_df
+
+    df.to_csv(csv_file, index=False)
+
+@app.route('/', methods=['GET', 'POST'])
+def homepage():
+    if request.method == 'POST':
+        name = request.form.get('name')
+        phone = request.form.get('phone')
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        items = {
+            'فينو': int(request.form.get('qty_fino') or 0),
+            'كرواسون': int(request.form.get('qty_croissant') or 0),
+            'فطير': int(request.form.get('qty_feteer') or 0),
+            'خبز': int(request.form.get('qty_khobz') or 0),
+        }
+
+        custom_product = request.form.get('custom')
+        custom_qty = int(request.form.get('qty_custom') or 0)
+        if custom_product and custom_qty > 0:
+            items[custom_product] = custom_qty
+
+        save_order_to_csv(name, phone, items, now)
+
+        return f"<h2>شكرًا يا {name}! تم استلام طلبك.</h2><a href='/'>رجوع</a> | <a href='/orders'>عرض الطلبات</a>"
+
+    return """
+    <!DOCTYPE html>
+    <html lang="ar">
+    <head>
+      <meta charset="UTF-8">
+      <title>مخبز آل سعودي</title>
+      <style>
+        body {
+          font-family: sans-serif;
+          direction: rtl;
+          background-color: #fff8e1;
+          text-align: center;
+          padding: 20px;
+        }
+        header {
+          background-color: #a0522d;
+          color: white;
+          padding: 30px;
+        }
+        .card {
+          background-color: white;
+          border-radius: 10px;
+          padding: 20px;
+          margin: 20px auto;
+          max-width: 600px;
+          box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        input[type="text"], input[type="number"] {
+          padding: 10px;
+          width: 70%;
+          margin: 10px 0;
+        }
+        button {
+          padding: 10px 20px;
+          background-color: #a0522d;
+          color: white;
+          border: none;
+          cursor: pointer;
+          font-size: 16px;
+        }
+        footer {
+          margin-top: 20px;
+          font-size: 14px;
+        }
+        .contact {
+          margin-top: 20px;
+          font-size: 16px;
+          font-weight: bold;
+        }
+        label {
+          display: block;
+          margin-top: 15px;
+        }
+      </style>
+    </head>
+    <body>
+      <header>
+        <h1>مخبز آل سعودي</h1>
+        <p>الخبز الطازج يوميًا من قلب الفرن إلى بيتك</p>
+      </header>
+
+      <div class="card">
+        <h2>اطلب الآن</h2>
+        <form method="POST">
+          <input type="text" name="name" placeholder="اسمك" required><br>
+          <input type="text" name="phone" placeholder="رقم التليفون" required><br>
+
+          <label>فينو:</label>
+          <input type="number" name="qty_fino" min="0" placeholder="الكمية"><br>
+
+          <label>كرواسون:</label>
+          <input type="number" name="qty_croissant" min="0" placeholder="الكمية"><br>
+
+          <label>فطير:</label>
+          <input type="number" name="qty_feteer" min="0" placeholder="الكمية"><br>
+
+          <label>خبز:</label>
+          <input type="number" name="qty_khobz" min="0" placeholder="الكمية"><br>
+
+          <label>أخرى:</label>
+          <input type="text" name="custom" placeholder="اسم المنتج الآخر">
+          <input type="number" name="qty_custom" min="0" placeholder="الكمية"><br>
+
+          <button type="submit">تأكيد الطلب</button>
+        </form>
+      </div>
+
+      <div class="contact">
+        <p>للتواصل اتصل أو ابعت واتساب: <a href="tel:+201062182971">+20 10 62182971</a></p>
+      </div>
+
+      <footer>
+        &copy; 2025 - جميع الحقوق محفوظة لـ مخبز آل سعودي
+      </footer>
+    </body>
+    </html>
+    """
+
+@app.route('/orders')
+def show_orders():
+    if os.path.exists(csv_file):
+        df = pd.read_csv(csv_file)
+        html = "<h1 style='text-align:center;'>قائمة الطلبات</h1><ul style='direction:rtl; font-size:18px;'>"
+        for _, row in df.iterrows():
+            html += f"<li>{row['Name']} - {row['Phone']} - {row['Product']} ({row['Quantity']}) - {row['Timestamp']}</li>"
+        html += "</ul><div style='text-align:center;'><a href='/'>رجوع</a></div>"
+        return html
+    else:
+        return "<h1>لا توجد طلبات حالياً.</h1><a href='/'>العودة للصفحة الرئيسية</a>"
+
+if __name__ == '__main__':
+    app.run(debug=True)
